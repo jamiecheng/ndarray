@@ -34,7 +34,7 @@ namespace nd {
         // friend operators //
         //////////////////////
 
-        friend std::ostream &operator<<(std::ostream &os, array<T> &ar) {
+        friend std::ostream &operator<<(std::ostream &os, const array<T> &ar) {
             return os << ar.dump();
         }
 
@@ -120,21 +120,23 @@ namespace nd {
         // object accesors //
         /////////////////////
 
-        std::string dump() {
+        std::string dump() const {
             std::stringstream result;
 
             if (m_type == value_t::scalar) {
                 result << scalar();
             } else if (m_shape.size() == 1) {
-                result << "  [ ";
+                if(m_base == nullptr) result << "[ ";
+                else result << "  [ ";
+
                 for (const auto &val : *m_value.values) {
-                    result << "  " << val << " ";
+                    result << " " << val << " ";
                 }
-                result << "  ]";
+                result << " ]";
             } else {
                 result << "[\n";
-                for (int j = 0; j < rows(); j++) {
-                    result << at(j).dump() << "\n";
+                for (int i = 0; i < rows(); ++i) {
+                    result << at(i).dump() << "\n";
                 }
                 result << "]";
             }
@@ -188,14 +190,21 @@ namespace nd {
 
         const this_type *base() const { return m_base; }
 
-        this_type at(unsigned long index) {
+        this_type at(unsigned long index) const {
             if (index > m_shape.at(0) - 1 || m_type == value_t::scalar)
                 throw std::range_error("no value at index " + std::to_string(index));
 
-            if(m_base == nullptr) m_base = this;
+            this_type *from_base = m_base;
+            if(m_base == nullptr) {
+                from_base = const_cast<this_type *>(this);
+            }
 
             // is a 1 dim array, get scalar
-            if (m_shape.size() == 1) { return this_type(std::move(m_value.values->at(index)), m_base, m_offset + index); }
+            if (m_shape.size() == 1) {
+                return this_type(std::move(m_value.values->at(index)),
+                                                        from_base,
+                                                        m_offset + index);
+            }
 
             auto first = m_value.values->begin() + (index * m_strides.at(0));
             auto second = m_value.values->begin() + ((index + 1) * m_strides.at(0));
@@ -203,11 +212,11 @@ namespace nd {
 
             return this_type(new_data,
                              std::deque<unsigned long>(m_shape.begin() + 1, m_shape.end()),
-                             m_base,
+                             from_base,
                              std::distance(m_value.values->begin(), first) + m_offset);
         }
 
-        this_type operator[](unsigned long index) {
+        this_type operator[](unsigned long index) const {
             return at(index);
         }
 
@@ -273,7 +282,7 @@ namespace nd {
         void __set_strides(const shape_t &shape) {
             m_strides = std::vector<unsigned long>(m_shape.size());
 
-            for (int i = (int) (m_shape.size() - 2); i >= 0; i--) {
+            for (int i = (int) (m_shape.size() - 2); i >= 0; --i) {
                 m_strides.at(i) = (unsigned long) std::accumulate(shape.begin() + i + 1, shape.end(), 1,
                                                                   std::multiplies<unsigned long>());
             }

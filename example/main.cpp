@@ -1,10 +1,8 @@
 #include <iostream>
 
 #include "array.hpp"
-#include "json.hpp"
 
 using namespace std;
-using nlohmann::json;
 
 int main() {
     nd::array<double> ar = {
@@ -18,15 +16,18 @@ int main() {
     cout << "n elements: " << ar.size() << "\n";
     cout << ar << "\n";
 
-    nd::array<double> ar2 = {1, 2, 3, 4, 5};
+    nd::array<double> ar2 = {1, 2, 3, 4, 5, 6};
 
-    ar2.unary_expr([](double val) { return val * 10; });
+    ar2[0] = 960;
 
     cout << "n dimensions: " << ar2.ndim() << "\n";
     cout << "n elements: " << ar2.size() << "\n";
-    cout << ar2.at(1) << "\n";
+    cout << ar2 << "\n";
 
-    ar = ar2;
+    ar2.set_shape({2, 3});
+
+    cout << "new shape:" << "\n";
+    cout << ar2 << "\n";
 
     return 0;
 }
