@@ -5,29 +5,48 @@
 using namespace std;
 
 int main() {
-    nd::array<double> ar = {
+    cout << "----------------------- 3D -----------------------\n";
+    nd::array<double> array3d = {
             {{1, 2, 3}, {1, 2, 3}, {1, 2, 3}},
             {{4, 5, 6}, {4, 5, 6}, {4, 5, 6}}
     };
 
-    ar.unary_expr([](double val) { return val * 10; });
+    cout << "n dimensions: " << array3d.ndim() << "\n";
+    cout << "n elements: " << array3d.size() << "\n";
+    cout << array3d << "\n";
 
-    cout << "n dimensions: " << ar.ndim() << "\n";
-    cout << "n elements: " << ar.size() << "\n";
-    cout << ar << "\n";
+    // get array in an array
+    cout << "sub array is:\n" << array3d[0] << "\n";
 
-    nd::array<double> ar2 = {1, 2, 3, 4, 5, 6};
+    // get array scalar object
+    cout << "scalar value: " << array3d[0][1][2] << "\n";
 
-    ar2[0] = 960;
+    // get and set a scalar value with template type T.
+    // this way is faster than at() and operator[]
+    array3d.item({1, 1, 1}) = 999;
 
-    cout << "n dimensions: " << ar2.ndim() << "\n";
-    cout << "n elements: " << ar2.size() << "\n";
-    cout << ar2 << "\n";
+    // apply function to all elements
+    array3d.unary_expr([](double val) { return val / 2; });
 
-    ar2.set_shape({2, 3});
+    cout << "array is now:\n" << array3d << "\n\n";
 
-    cout << "new shape:" << "\n";
-    cout << ar2 << "\n";
+    cout << "----------------------- 1D -----------------------\n";
+
+    nd::array<double> array1d = {1, 2, 3, 4, 5, 6.5};
+
+    cout << array1d << "\n";
+
+    // make array1d a 2x3 array
+    array1d.set_shape({2, 3});
+
+    cout << "reshape array:" << "\n";
+    cout << array1d << "\n";
+
+    cout << "--------------- random initialise ----------------\n";
+
+    nd::array<double> someRandomArray({3, 3}, 3.5, true);
+
+    cout << someRandomArray << "\n";
 
     return 0;
 }

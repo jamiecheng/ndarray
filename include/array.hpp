@@ -12,6 +12,7 @@
 #include <sstream>
 #include <deque>
 #include <algorithm>
+#include <random>
 
 namespace nd {
     enum class value_t : uint8_t {
@@ -47,7 +48,7 @@ namespace nd {
 
             array_value(T sc) : scalar(sc) {}
 
-            array_value(const vector_t &vec) { values = create_vector(vec); }
+            array_value(const vector_t &vec) { values = __create_vector(vec); }
         };
 
         //////////////////
@@ -66,25 +67,25 @@ namespace nd {
 
         array(T &&val, this_type *base_from = nullptr, unsigned long offset = 0)
                 : m_base(base_from),
+                  m_type(value_t::scalar),
                   m_offset(offset) {
             static_assert(std::is_arithmetic<T>::value, "incompatible element type");
 
-            m_type = value_t::scalar;
             m_value.scalar = std::forward<T>(val);
             m_shape = {1};
         }
 
-        array(std::initializer_list<array> list) :
-                m_base(nullptr) {
+        array(std::initializer_list<array> list)
+                : m_type(value_t::array),
+                  m_base(nullptr) {
             // type becomes array, so make vector active in the union
-            m_type = value_t::array;
-            m_value.values = create_vector(vector_t());
+            m_value.values = __create_vector(vector_t());
 
             m_shape.emplace_front(list.size());
 
             for (auto &val : list) {
                 if (val.m_type == value_t::scalar) { // construct individual elements form list
-                    m_value.values->push_back(val.scalar());
+                    m_value.values->push_back(val.m_value.scalar);
                     __set_strides(m_shape);
                 } else { // add values to the actual object
                     m_value.values->insert(std::end(*m_value.values), std::begin(val.data()), std::end(val.data()));
@@ -100,8 +101,28 @@ namespace nd {
                   m_base(base_from),
                   m_offset(offset) {
             m_type = value_t::array;
-            m_value.values = create_vector(data.begin(), data.end());
+            m_value.values = __create_vector(data.begin(), data.end());
             __set_strides(shape);
+        }
+
+        array(const shape_t &shape, T init, bool random)
+                : m_shape(shape),
+                  m_type(value_t::array) {
+            auto size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<unsigned long>());
+
+            m_value.values = __create_vector(vector_t(size, init));
+
+            if(random) {
+                std::random_device rd;
+                std::mt19937 rng(rd());
+                std::uniform_real_distribution<double> uni(-1, 1);
+
+                for(auto &val : *m_value.values) {
+                    val = uni(rng);
+                }
+            }
+
+            __set_strides(m_shape);
         }
 
         ~array() {
@@ -124,15 +145,19 @@ namespace nd {
             std::stringstream result;
 
             if (m_type == value_t::scalar) {
-                result << scalar();
+                result << m_value.scalar;
             } else if (m_shape.size() == 1) {
-                if(m_base == nullptr) result << "[ ";
+                if (m_base == nullptr) result << "[ ";
                 else result << "  [ ";
 
                 for (const auto &val : *m_value.values) {
                     result << " " << val << " ";
                 }
                 result << " ]";
+            } else if(m_shape.size() == 2) {
+                for (int i = 0; i < rows(); ++i) {
+                    result << at(i).dump() << "\n";
+                }
             } else {
                 result << "[\n";
                 for (int i = 0; i < rows(); ++i) {
@@ -146,15 +171,30 @@ namespace nd {
 
         const vector_t &data() const {
             if (m_type != value_t::array)
-                throw std::runtime_error("current value is not an array, use .scalar() instead");
+                throw std::runtime_error("current value is not an array");
 
             return *m_value.values;
         }
 
-        T scalar() const {
-            if (m_type != value_t::scalar) throw std::runtime_error("current value is not a scalar");
+        T &item(const shape_t &indexes) const {
+            if (indexes.size() != m_shape.size())
+                throw std::invalid_argument("requested shape size is not equal with the current shape size");
 
-            return m_value.scalar;
+            if (m_type == value_t::scalar)
+                throw std::invalid_argument("type is already is a scalar");
+
+            // calculate offset
+            int offset = {};
+
+            for(int i = 0; i < m_shape.size(); ++i) {
+                offset += indexes[i] * m_strides[i];
+            }
+
+            if (offset > m_value.values->size())
+                throw std::range_error("requested index is out of range(" +
+                                       std::to_string(m_value.values->size()) + ")");
+
+            return m_value.values->at(offset);
         }
 
         bool is_scalar() const { return m_type == value_t::scalar; }
@@ -195,15 +235,15 @@ namespace nd {
                 throw std::range_error("no value at index " + std::to_string(index));
 
             this_type *from_base = m_base;
-            if(m_base == nullptr) {
+            if (m_base == nullptr) {
                 from_base = const_cast<this_type *>(this);
             }
 
             // is a 1 dim array, get scalar
             if (m_shape.size() == 1) {
                 return this_type(std::move(m_value.values->at(index)),
-                                                        from_base,
-                                                        m_offset + index);
+                                 from_base,
+                                 m_offset + index);
             }
 
             auto first = m_value.values->begin() + (index * m_strides.at(0));
@@ -263,8 +303,7 @@ namespace nd {
             if (m_base == nullptr) {
                 m_value.scalar = val;
                 return *this;
-            }
-            else {
+            } else {
                 m_base->set_data(val, m_offset);
                 return *m_base;
             }
@@ -282,18 +321,20 @@ namespace nd {
         void __set_strides(const shape_t &shape) {
             m_strides = std::vector<unsigned long>(m_shape.size());
 
+            m_strides.back() = 1;
+
             for (int i = (int) (m_shape.size() - 2); i >= 0; --i) {
                 m_strides.at(i) = (unsigned long) std::accumulate(shape.begin() + i + 1, shape.end(), 1,
                                                                   std::multiplies<unsigned long>());
             }
         }
 
-        static vector_t *create_vector(const vector_t &vec) {
+        static vector_t *__create_vector(const vector_t &vec) {
             return new vector_t(vec.begin(), vec.end());
         }
 
         static vector_t *
-        create_vector(const typename vector_t::iterator &first, const typename vector_t::iterator &second) {
+        __create_vector(const typename vector_t::iterator &first, const typename vector_t::iterator &second) {
             return new vector_t(first, second);
         }
     };
