@@ -37,14 +37,16 @@ int main() {
     cout << array1d << "\n";
 
     // make array1d a 2x3 array
-    array1d.set_shape({2, 3});
+    array1d.reshape({2, 3});
 
     cout << "reshape array:" << "\n";
     cout << array1d << "\n";
 
     cout << "--------------- random initialise ----------------\n";
 
-    nd::array<double> someRandomArray({3, 3}, 3.5, true);
+    nd::array<double> someRandomArray({2, 3, 4}, 1.0);
+
+    someRandomArray.random(-1, 1);
 
     cout << someRandomArray << "\n";
 

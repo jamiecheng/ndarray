@@ -125,22 +125,12 @@ namespace nd {
             __set_strides(shape);
         }
 
-        array(const shape_t &shape, T init, bool random)
+        array(const shape_t &shape, T init)
                 : m_shape(shape),
                   m_type(value_t::array) {
             auto size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<unsigned long>());
 
             m_value.values = __create_vector(vector_t(size, init));
-
-            if(random) {
-                std::random_device rd;
-                std::mt19937 rng(rd());
-                std::uniform_real_distribution<double> uni(-1, 1);
-
-                for(auto &val : *m_value.values) {
-                    val = uni(rng);
-                }
-            }
 
             __set_strides(m_shape);
         }
@@ -174,10 +164,6 @@ namespace nd {
                     result << " " << val << " ";
                 }
                 result << " ]";
-            } else if(m_shape.size() == 2) {
-                for (int i = 0; i < rows(); ++i) {
-                    result << at(i).dump() << "\n";
-                }
             } else {
                 result << "[\n";
                 for (int i = 0; i < rows(); ++i) {
@@ -210,16 +196,12 @@ namespace nd {
                 offset += indexes[i] * m_strides[i];
             }
 
-            if (offset > m_value.values->size())
-                throw std::range_error("requested index is out of range(" +
-                                       std::to_string(m_value.values->size()) + ")");
+//            if (offset > m_value.values->size())
+//                throw std::range_error("requested index is out of range(" +
+//                                       std::to_string(m_value.values->size()) + ")");
 
             return m_value.values->at(offset);
         }
-
-        bool is_scalar() const { return m_type == value_t::scalar; }
-
-        bool is_array() const { return m_type == value_t::array; }
 
         unsigned long rows() const { return m_shape.at(0); }
 
@@ -249,6 +231,10 @@ namespace nd {
         }
 
         const this_type *base() const { return m_base; }
+
+        bool is_scalar() const { return m_type == value_t::scalar; }
+
+        bool is_array() const { return m_type == value_t::array; }
 
         this_type at(unsigned long index) const {
             if (index > m_shape.at(0) - 1 || m_type == value_t::scalar)
@@ -280,23 +266,29 @@ namespace nd {
             return at(index);
         }
 
+        this_type transpose() {
+
+        }
+
         ////////////////
         // modifiers //
         ////////////////
-
-        void set_data(T val, unsigned long offset = 0) {
-            if (m_type == value_t::scalar) m_value.scalar = val;
-            else m_value.values->at(offset) = val;
-        }
 
         void swap(reference other) {
             std::swap(m_type, other.m_type);
             std::swap(m_value, other.m_value);
             std::swap(m_shape, other.m_shape);
             std::swap(m_strides, other.m_strides);
+            std::swap(m_base, other.m_base);
+            std::swap(m_offset, other.m_offset);
         }
 
-        void set_shape(const shape_t &shape) {
+        void set_val(T val, unsigned long offset = 0) {
+            if (m_type == value_t::scalar) m_value.scalar = val;
+            else m_value.values->at(offset) = val;
+        }
+
+        void reshape(const shape_t &shape) {
             auto pd = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<unsigned long>());
 
             if (pd != m_value.values->size())
@@ -317,6 +309,16 @@ namespace nd {
             }
         }
 
+        void random(int min, int max) {
+            std::random_device rd;
+            std::mt19937 rng(rd());
+            std::uniform_real_distribution<T> uni(-1, 1);
+
+            for(auto &val : *m_value.values) {
+                val = uni(rng);
+            }
+        }
+
         const this_type &operator=(T val) {
             if (m_type != value_t::scalar) throw std::invalid_argument("can't assign number, current type is array");
 
@@ -324,7 +326,7 @@ namespace nd {
                 m_value.scalar = val;
                 return *this;
             } else {
-                m_base->set_data(val, m_offset);
+                m_base->set_val(val, m_offset);
                 return *m_base;
             }
         }
