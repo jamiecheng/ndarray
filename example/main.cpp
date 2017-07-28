@@ -44,11 +44,11 @@ int main() {
 
     cout << "--------------- random initialise ----------------\n";
 
-    nd::array<double> someRandomArray({2, 3, 4}, 1.0);
+    nd::array<double> someRandomArray({2, 3, 4}, 0.0);
 
-    someRandomArray.random(-1, 1);
+    someRandomArray.arrange(0, 2 * 3 * 4);
 
-    cout << someRandomArray << "\n";
+    cout << someRandomArray.transpose({2, 1, 0}) << "\n";
 
     return 0;
 }

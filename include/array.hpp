@@ -266,8 +266,40 @@ namespace nd {
             return at(index);
         }
 
-        this_type transpose() {
+        void arrange(unsigned long start, unsigned long end, T step = 1) {
+            for(auto &val : *m_value.values) {
+                if(start < end) {
+                    val = start;
+                    start += step;
+                }
+            }
+        }
 
+        this_type transpose(const shape_t &permute) {
+            auto n = permute.size();
+            int permutation[64], rpermutation[64];
+
+            if(n != m_shape.size())
+                throw std::invalid_argument("axes don't match array");
+
+            for(unsigned long i = 0; i < n; ++i) {
+                rpermutation[i] = -1;
+            }
+
+            for(unsigned long i = 0; i < n; ++i) {
+                auto axis = permute.at(i);
+                rpermutation[axis] = i;
+                permutation[i] = axis;
+            }
+
+            array<double> ret = *this;
+
+            for(unsigned long i = 0; i < n; ++i) {
+                ret.m_shape.at(i) = m_shape.at(permutation[i]);
+                ret.m_strides.at(i) = m_strides.at(permutation[i]);
+            }
+
+            return ret;
         }
 
         ////////////////
