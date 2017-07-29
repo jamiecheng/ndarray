@@ -42,13 +42,13 @@ int main() {
     cout << "reshape array:" << "\n";
     cout << array1d << "\n";
 
-    cout << "--------------- random initialise ----------------\n";
+    cout << "------------------- transpose --------------------\n";
 
-    nd::array<double> someRandomArray({2, 3, 4}, 0.0);
+    nd::array<int> someArray({2, 3}, 0);
 
-    someRandomArray.arrange(0, 2 * 3 * 4);
+    someArray.arrange(0, 2 * 3);
 
-    cout << someRandomArray.transpose({2, 1, 0}) << "\n";
+    cout << someArray.transpose() << "\n";
 
     return 0;
 }

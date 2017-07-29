@@ -25,13 +25,8 @@ SOFTWARE.
 #ifndef ARRAY_ARRAY_HPP
 #define ARRAY_ARRAY_HPP
 
-#include <type_traits>
-#include <vector>
-#include <numeric>
-#include <memory>
 #include <sstream>
 #include <deque>
-#include <algorithm>
 #include <random>
 
 namespace nd {
@@ -48,7 +43,7 @@ namespace nd {
         using const_reference = const array &;
 
         using shape_t = std::deque<unsigned long>;
-        using strides_t = std::vector<unsigned long>;
+        using strides_t = std::deque<unsigned long>;
         using vector_t = std::vector<T>;
 
         //////////////////////
@@ -160,9 +155,10 @@ namespace nd {
                 if (m_base == nullptr) result << "[ ";
                 else result << "  [ ";
 
-                for (const auto &val : *m_value.values) {
-                    result << " " << val << " ";
+                for (unsigned long i = 0; i < m_shape.at(0); ++i) {
+                    result << " " << std::to_string(item({i})) << " ";
                 }
+
                 result << " ]";
             } else {
                 result << "[\n";
@@ -190,9 +186,9 @@ namespace nd {
                 throw std::invalid_argument("type is already is a scalar");
 
             // calculate offset
-            int offset = {};
+            unsigned long offset = {m_offset};
 
-            for(int i = 0; i < m_shape.size(); ++i) {
+            for (int i = 0; i < m_shape.size(); ++i) {
                 offset += indexes[i] * m_strides[i];
             }
 
@@ -237,29 +233,36 @@ namespace nd {
         bool is_array() const { return m_type == value_t::array; }
 
         this_type at(unsigned long index) const {
-            if (index > m_shape.at(0) - 1 || m_type == value_t::scalar)
-                throw std::range_error("no value at index " + std::to_string(index));
+            if (index > m_shape.at(0) || m_type == value_t::scalar)
+                throw std::range_error("requested index is out of range");
 
-            this_type *from_base = m_base;
+            strides_t indexes(ndim(), 0);
+            unsigned long offset = {m_offset};
+
+            indexes.at(0) = index;
+
+            for (unsigned long i = 0; i < indexes.size(); ++i) {
+                offset += indexes.at(i) * m_strides.at(i);
+            }
+
+            this_type ret = *this;
+
             if (m_base == nullptr) {
-                from_base = const_cast<this_type *>(this);
+                ret.m_base = const_cast<this_type *>(this);
+            } else {
+                ret.m_base = m_base;
             }
 
-            // is a 1 dim array, get scalar
+            ret.m_shape.pop_front();
+            ret.m_strides.pop_front();
+            ret.m_offset = offset;
+
             if (m_shape.size() == 1) {
-                return this_type(std::move(m_value.values->at(index)),
-                                 from_base,
-                                 m_offset + index);
+                ret.m_type = value_t::scalar;
+                ret.m_value.scalar = m_value.values->at(offset);
             }
 
-            auto first = m_value.values->begin() + (index * m_strides.at(0));
-            auto second = m_value.values->begin() + ((index + 1) * m_strides.at(0));
-            vector_t new_data(first, second);
-
-            return this_type(new_data,
-                             std::deque<unsigned long>(m_shape.begin() + 1, m_shape.end()),
-                             from_base,
-                             std::distance(m_value.values->begin(), first) + m_offset);
+            return ret;
         }
 
         this_type operator[](unsigned long index) const {
@@ -267,34 +270,50 @@ namespace nd {
         }
 
         void arrange(unsigned long start, unsigned long end, T step = 1) {
-            for(auto &val : *m_value.values) {
-                if(start < end) {
+            for (auto &val : *m_value.values) {
+                if (start < end) {
                     val = start;
                     start += step;
                 }
             }
         }
 
-        this_type transpose(const shape_t &permute) {
+        this_type transpose(const shape_t &permute = {}) const {
+            if (ndim() < 2)
+                return *this;
+
             auto n = permute.size();
-            int permutation[64], rpermutation[64];
+            int permutation[64], revpermutation[64];
 
-            if(n != m_shape.size())
-                throw std::invalid_argument("axes don't match array");
+            // default reverse
+            if (n == 0) {
+                n = ndim();
+                for (unsigned long i = 0; i < n; ++i) {
+                    permutation[i] = n - 1 - i;
+                }
+            } else {
+                if (n != ndim())
+                    throw std::invalid_argument("axes don't match array");
 
-            for(unsigned long i = 0; i < n; ++i) {
-                rpermutation[i] = -1;
+                for (unsigned long i = 0; i < n; ++i) {
+                    revpermutation[i] = -1;
+                }
+
+                for (unsigned long i = 0; i < n; ++i) {
+                    auto axis = permute.at(i);
+
+                    if (revpermutation[axis] != -1) {
+                        throw std::runtime_error("repeated axis in transpose");
+                    }
+
+                    revpermutation[axis] = i;
+                    permutation[i] = axis;
+                }
             }
 
-            for(unsigned long i = 0; i < n; ++i) {
-                auto axis = permute.at(i);
-                rpermutation[axis] = i;
-                permutation[i] = axis;
-            }
+            this_type ret = *this;
 
-            array<double> ret = *this;
-
-            for(unsigned long i = 0; i < n; ++i) {
+            for (unsigned long i = 0; i < n; ++i) {
                 ret.m_shape.at(i) = m_shape.at(permutation[i]);
                 ret.m_strides.at(i) = m_strides.at(permutation[i]);
             }
@@ -346,7 +365,7 @@ namespace nd {
             std::mt19937 rng(rd());
             std::uniform_real_distribution<T> uni(-1, 1);
 
-            for(auto &val : *m_value.values) {
+            for (auto &val : *m_value.values) {
                 val = uni(rng);
             }
         }
@@ -368,12 +387,12 @@ namespace nd {
         array_value m_value = {};
         shape_t m_shape;
         strides_t m_strides;
-        this_type *m_base;
+        this_type *m_base = nullptr;
         unsigned long m_offset = {};
 
         // private setters
         void __set_strides(const shape_t &shape) {
-            m_strides = std::vector<unsigned long>(m_shape.size());
+            m_strides = strides_t(m_shape.size());
 
             m_strides.back() = 1;
 
@@ -390,6 +409,12 @@ namespace nd {
         static vector_t *
         __create_vector(const typename vector_t::iterator &first, const typename vector_t::iterator &second) {
             return new vector_t(first, second);
+        }
+
+        std::string __to_string(const T val, const int n = 6) const {
+            char out[64];
+            sprintf(out, "%0.3f", val);
+            return out;
         }
     };
 }
