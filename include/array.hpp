@@ -166,6 +166,33 @@ namespace nd {
             return m_data;
         }
 
+        unsigned long rows() const { return m_shape.at(0); }
+
+        unsigned long columns() const {
+            if (m_shape.size() == 2) return m_shape.at(1);
+
+            /// TBD
+            return 0;
+        }
+
+        const strides_t &strides() const { return m_strides; }
+
+        const shape_t &shape() const { return m_shape; }
+
+        unsigned long offset() const { return m_offset; }
+
+        unsigned long size() const { return m_data.size(); }
+
+        unsigned long ndim() const { return m_shape.size(); }
+
+        value_t type() const { return m_type; }
+
+        const this_type *base() const { return m_base; }
+
+        bool is_scalar() const { return m_type == value_t::scalar; }
+
+        bool is_array() const { return m_type == value_t::array; }
+
         T &item(const shape_t &indexes)  {
             if (indexes.size() != m_shape.size())
                 throw std::invalid_argument("requested shape size is not equal with the current shape size");
@@ -182,37 +209,6 @@ namespace nd {
 
             return m_data.at(offset);
         }
-
-        unsigned long rows() const { return m_shape.at(0); }
-
-        unsigned long columns() const {
-            if (m_shape.size() == 2) return m_shape.at(1);
-
-            /// TBD
-            return 0;
-        }
-
-        const shape_t &shape() const {
-            return m_shape;
-        }
-
-        unsigned long offset() const { return m_offset; }
-
-        unsigned long size() const { return m_data.size(); }
-
-        unsigned long ndim() const {
-            return m_shape.size();
-        }
-
-        value_t type() const {
-            return m_type;
-        }
-
-        const this_type *base() const { return m_base; }
-
-        bool is_scalar() const { return m_type == value_t::scalar; }
-
-        bool is_array() const { return m_type == value_t::array; }
 
         this_type at(unsigned long index) const {
             if (index > m_shape.at(0) || m_type == value_t::scalar)
@@ -360,6 +356,14 @@ namespace nd {
             for (auto &val : m_data) {
                 val = uni(rng);
             }
+        }
+
+        bool operator==(const_reference other) const {
+            if(!std::equal(m_shape.begin(), m_shape.end(), other.shape().begin()) ||
+                    m_type != other.type()) return false;
+
+            ///TBD: check if values are equal
+            return true;
         }
 
         const this_type &operator=(T val) {
