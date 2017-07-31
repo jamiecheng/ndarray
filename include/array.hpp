@@ -288,16 +288,16 @@ namespace nd {
                         throw std::runtime_error("repeated axis in transpose");
                     }
 
-                    revpermutation[axis] = i;
-                    permutation[i] = axis;
+                    revpermutation[axis] = static_cast<int>(i);
+                    permutation[i] = static_cast<int>(axis);
                 }
             }
 
             this_type ret = *this;
 
             for (unsigned long i = 0; i < n; ++i) {
-                ret.m_shape.at(i) = m_shape.at(permutation[i]);
-                ret.m_strides.at(i) = m_strides.at(permutation[i]);
+                ret.m_shape.at(i) = m_shape.at(static_cast<unsigned long>(permutation[i]));
+                ret.m_strides.at(i) = m_strides.at(static_cast<unsigned long>(permutation[i]));
             }
 
             return ret;
