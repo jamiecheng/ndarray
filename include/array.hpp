@@ -28,6 +28,7 @@ SOFTWARE.
 #include <sstream>
 #include <deque>
 #include <random>
+#include <iomanip>
 
 namespace nd {
     enum class value_t : uint8_t {
@@ -140,7 +141,7 @@ namespace nd {
             std::stringstream result;
 
             if (m_type == value_t::scalar) {
-                result << m_data.at(0);
+                result << std::to_string(m_data.at(0));
             } else if (m_shape.size() == 1) {
                 if (m_base == nullptr) result << "[ ";
                 else result << "  [ ";
