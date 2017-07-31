@@ -214,7 +214,7 @@ namespace nd {
 
         unsigned long offset() const { return m_offset; }
 
-        unsigned long size() {
+        unsigned long size() const {
             return m_value.values->size();
         }
 
@@ -322,7 +322,7 @@ namespace nd {
         }
 
         ////////////////
-        // modifiers //
+        //  modifiers //
         ////////////////
 
         void swap(reference other) {
@@ -350,13 +350,28 @@ namespace nd {
             __set_strides(m_shape);
         }
 
-        void unary_expr(T(*callback)(T)) {
+        template <typename callback>
+        void unary_expr(callback clb) {
             if (m_type == value_t::array) {
                 for (auto &val : *m_value.values) {
-                    val = callback(val);
+                    val = clb(val);
                 }
             } else {
-                m_value.scalar = callback(m_value.scalar);
+                m_value.scalar = clb(m_value.scalar);
+            }
+        }
+
+        template <typename callback>
+        void unary_expr(const_reference other, callback clb) {
+            if(m_type != other.type() || size() != other.size())
+                throw std::invalid_argument("cannot perform unary_expr() if arrays are not equal");
+
+            if (m_type == value_t::array) {
+                for (unsigned long i = 0; i < size(); ++i) {
+                    m_value.values->at(i) = clb(m_value.values->at(i), other.data().at(i));
+                }
+            } else {
+                m_value.scalar = clb(m_value.scalar, other.m_value.scalar);
             }
         }
 
@@ -380,6 +395,50 @@ namespace nd {
                 m_base->set_val(val, m_offset);
                 return *m_base;
             }
+        }
+
+        ///////////////////////////
+        //  arithmetic operators //
+        ///////////////////////////
+
+        const_reference operator+=(T val) {
+            unary_expr([&val](double v){ return v + val; });
+            return *this;
+        }
+
+        const_reference operator+=(const_reference other) {
+            unary_expr(other, std::plus<T>());
+            return *this;
+        }
+
+        const_reference operator-=(T val) {
+            unary_expr([&val](double v){ return v - val; });
+            return *this;
+        }
+
+        const_reference operator-=(const_reference other) {
+            unary_expr(other, std::minus<T>());
+            return *this;
+        }
+
+        const_reference operator*=(T val) {
+            unary_expr([&val](double v){ return v * val; });
+            return *this;
+        }
+
+        const_reference operator*=(const_reference other) {
+            unary_expr(other, std::multiplies<T>());
+            return *this;
+        }
+
+        const_reference operator/=(T val) {
+            unary_expr([&val](double v){ return v / val; });
+            return *this;
+        }
+
+        const_reference operator/=(const_reference other) {
+            unary_expr(other, std::divides<T>());
+            return *this;
         }
 
     private:
