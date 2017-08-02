@@ -28,6 +28,7 @@ SOFTWARE.
 #include <sstream>
 #include <deque>
 #include <random>
+#include <iomanip>
 
 namespace nd {
     enum class value_t : uint8_t {
@@ -39,8 +40,8 @@ namespace nd {
     template<class T>
     class array {
         using this_type = array<T>;
-        using reference = array &;
-        using const_reference = const array &;
+        using reference = this_type &;
+        using const_reference = const this_type &;
 
         using shape_t = std::deque<unsigned long>;
         using strides_t = std::deque<unsigned long>;
@@ -50,60 +51,63 @@ namespace nd {
         // friend operators //
         //////////////////////
 
-        friend std::ostream &operator<<(std::ostream &os, const array<T> &ar) {
+        friend std::ostream &operator<<(std::ostream &os, const_reference ar) {
             return os << ar.dump();
         }
 
+        friend this_type operator+(this_type lhs, T rhs) {
+            return lhs += rhs;
+        }
+
+        friend this_type operator-(this_type lhs, T rhs) {
+            return lhs -= rhs;
+        }
+
+        friend this_type operator*(this_type lhs, T rhs) {
+            return lhs *= rhs;
+        }
+
+        friend this_type operator/(this_type lhs, T rhs) {
+            return lhs /= rhs;
+        }
+
     public:
-        union array_value {
-            T scalar;
-            vector_t *values;
-
-            array_value() = default;
-
-            array_value(T sc) : scalar(sc) {}
-
-            array_value(const vector_t &vec) { values = __create_vector(vec); }
-        };
 
         //////////////////
         // constructors //
         //////////////////
 
         array(const this_type &other, unsigned long offset = 0)
-                : m_type(other.m_type),
+                : m_data(other.data()),
+                  m_type(other.m_type),
                   m_shape(other.m_shape),
                   m_strides(other.m_strides),
                   m_base(nullptr),
                   m_offset(offset) {
-            if (m_type == value_t::array) m_value = *other.m_value.values;
-            else m_value = other.m_value.scalar;
         }
 
-        array(T &&val, this_type *base_from = nullptr, unsigned long offset = 0)
-                : m_base(base_from),
-                  m_type(value_t::scalar),
+        array(T &&val, unsigned long offset = 0)
+                : m_type(value_t::scalar),
                   m_offset(offset) {
             static_assert(std::is_arithmetic<T>::value, "incompatible element type");
 
-            m_value.scalar = std::forward<T>(val);
+            m_data.resize(1);
+            m_data.at(0) = std::forward<T>(val);
             m_shape = {1};
         }
 
         array(std::initializer_list<array> list)
                 : m_type(value_t::array),
                   m_base(nullptr) {
-            // type becomes array, so make vector active in the union
-            m_value.values = __create_vector(vector_t());
 
             m_shape.emplace_front(list.size());
 
             for (auto &val : list) {
                 if (val.m_type == value_t::scalar) { // construct individual elements form list
-                    m_value.values->push_back(val.m_value.scalar);
+                    m_data.push_back(val.m_data.at(0));
                     __set_strides(m_shape);
                 } else { // add values to the actual object
-                    m_value.values->insert(std::end(*m_value.values), std::begin(val.data()), std::end(val.data()));
+                    m_data.insert(std::end(m_data), std::begin(val.data()), std::end(val.data()));
                     m_shape = val.shape();
                     m_shape.emplace_front(list.size());
                     __set_strides(m_shape);
@@ -111,30 +115,17 @@ namespace nd {
             }
         }
 
-        array(vector_t data, const shape_t &shape, this_type *base_from = nullptr, unsigned long offset = 0)
-                : m_shape(shape),
-                  m_base(base_from),
-                  m_offset(offset) {
-            m_type = value_t::array;
-            m_value.values = __create_vector(data.begin(), data.end());
-            __set_strides(shape);
-        }
-
         array(const shape_t &shape, T init)
                 : m_shape(shape),
                   m_type(value_t::array) {
             auto size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<unsigned long>());
 
-            m_value.values = __create_vector(vector_t(size, init));
+            m_data = vector_t(size, init);
 
             __set_strides(m_shape);
         }
 
-        ~array() {
-            if (m_type == value_t::array) {
-                delete m_value.values;
-            }
-        }
+        ~array() {}
 
         reference &operator=(array other) {
             swap(other);
@@ -150,13 +141,13 @@ namespace nd {
             std::stringstream result;
 
             if (m_type == value_t::scalar) {
-                result << m_value.scalar;
+                result << std::to_string(m_data.at(0));
             } else if (m_shape.size() == 1) {
                 if (m_base == nullptr) result << "[ ";
                 else result << "  [ ";
 
                 for (unsigned long i = 0; i < m_shape.at(0); ++i) {
-                    result << " " << std::to_string(item({i})) << " ";
+                    result << " " << at(i) << " ";
                 }
 
                 result << " ]";
@@ -172,13 +163,42 @@ namespace nd {
         }
 
         const vector_t &data() const {
-            if (m_type != value_t::array)
-                throw std::runtime_error("current value is not an array");
-
-            return *m_value.values;
+            return m_data;
         }
 
-        T &item(const shape_t &indexes) const {
+        unsigned long rows() const { return m_shape.at(0); }
+
+        unsigned long columns() const {
+            if (m_shape.size() == 2) return m_shape.at(1);
+
+            /// TBD
+            return 0;
+        }
+
+        const strides_t &strides() const { return m_strides; }
+
+        const shape_t &shape() const { return m_shape; }
+
+        unsigned long offset() const { return m_offset; }
+
+        unsigned long size() const { return m_data.size(); }
+
+        unsigned long ndim() const { return m_shape.size(); }
+
+        value_t type() const { return m_type; }
+
+        const this_type *base() const { return m_base; }
+
+        bool is_scalar() const { return m_type == value_t::scalar; }
+
+        bool is_array() const { return m_type == value_t::array; }
+
+        template <typename R>
+        R get() {
+
+        }
+
+        T &item(const shape_t &indexes)  {
             if (indexes.size() != m_shape.size())
                 throw std::invalid_argument("requested shape size is not equal with the current shape size");
 
@@ -192,52 +212,15 @@ namespace nd {
                 offset += indexes[i] * m_strides[i];
             }
 
-//            if (offset > m_value.values->size())
-//                throw std::range_error("requested index is out of range(" +
-//                                       std::to_string(m_value.values->size()) + ")");
-
-            return m_value.values->at(offset);
+            return m_data.at(offset);
         }
-
-        unsigned long rows() const { return m_shape.at(0); }
-
-        unsigned long columns() const {
-            if (m_shape.size() == 2) return m_shape.at(1);
-
-            /// TBD
-            return 0;
-        }
-
-        const shape_t &shape() const {
-            return m_shape;
-        }
-
-        unsigned long offset() const { return m_offset; }
-
-        unsigned long size() const {
-            return m_value.values->size();
-        }
-
-        unsigned long ndim() const {
-            return m_shape.size();
-        }
-
-        value_t type() const {
-            return m_type;
-        }
-
-        const this_type *base() const { return m_base; }
-
-        bool is_scalar() const { return m_type == value_t::scalar; }
-
-        bool is_array() const { return m_type == value_t::array; }
 
         this_type at(unsigned long index) const {
             if (index > m_shape.at(0) || m_type == value_t::scalar)
                 throw std::range_error("requested index is out of range");
 
             strides_t indexes(ndim(), 0);
-            unsigned long offset = {m_offset};
+            auto offset {m_offset};
 
             indexes.at(0) = index;
 
@@ -245,7 +228,7 @@ namespace nd {
                 offset += indexes.at(i) * m_strides.at(i);
             }
 
-            this_type ret = *this;
+            auto ret = *this;
 
             if (m_base == nullptr) {
                 ret.m_base = const_cast<this_type *>(this);
@@ -259,7 +242,7 @@ namespace nd {
 
             if (m_shape.size() == 1) {
                 ret.m_type = value_t::scalar;
-                ret.m_value.scalar = m_value.values->at(offset);
+                ret.m_data.at(0) = m_data.at(offset);
             }
 
             return ret;
@@ -270,7 +253,7 @@ namespace nd {
         }
 
         void arrange(unsigned long start, unsigned long end, T step = 1) {
-            for (auto &val : *m_value.values) {
+            for (auto &val : m_data) {
                 if (start < end) {
                     val = start;
                     start += step;
@@ -306,16 +289,16 @@ namespace nd {
                         throw std::runtime_error("repeated axis in transpose");
                     }
 
-                    revpermutation[axis] = i;
-                    permutation[i] = axis;
+                    revpermutation[axis] = static_cast<int>(i);
+                    permutation[i] = static_cast<int>(axis);
                 }
             }
 
             this_type ret = *this;
 
             for (unsigned long i = 0; i < n; ++i) {
-                ret.m_shape.at(i) = m_shape.at(permutation[i]);
-                ret.m_strides.at(i) = m_strides.at(permutation[i]);
+                ret.m_shape.at(i) = m_shape.at(static_cast<unsigned long>(permutation[i]));
+                ret.m_strides.at(i) = m_strides.at(static_cast<unsigned long>(permutation[i]));
             }
 
             return ret;
@@ -327,7 +310,7 @@ namespace nd {
 
         void swap(reference other) {
             std::swap(m_type, other.m_type);
-            std::swap(m_value, other.m_value);
+            std::swap(m_data, other.m_data);
             std::swap(m_shape, other.m_shape);
             std::swap(m_strides, other.m_strides);
             std::swap(m_base, other.m_base);
@@ -335,14 +318,13 @@ namespace nd {
         }
 
         void set_val(T val, unsigned long offset = 0) {
-            if (m_type == value_t::scalar) m_value.scalar = val;
-            else m_value.values->at(offset) = val;
+            m_data.at(offset) = val;
         }
 
         void reshape(const shape_t &shape) {
             auto pd = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<unsigned long>());
 
-            if (pd != m_value.values->size())
+            if (pd != m_data.size())
                 throw std::invalid_argument("total size of new array must be unchanged when setting a new shape");
             else
                 m_shape = shape;
@@ -350,29 +332,25 @@ namespace nd {
             __set_strides(m_shape);
         }
 
-        template <typename callback>
-        void unary_expr(callback clb) {
-            if (m_type == value_t::array) {
-                for (auto &val : *m_value.values) {
-                    val = clb(val);
-                }
-            } else {
-                m_value.scalar = clb(m_value.scalar);
+        template<typename callback>
+        const_reference unary_expr(callback clb) {
+            for (auto &val : m_data) {
+                val = clb(val);
             }
+
+            return *this;
         }
 
-        template <typename callback>
-        void unary_expr(const_reference other, callback clb) {
-            if(m_type != other.type() || size() != other.size())
+        template<typename callback>
+        const_reference unary_expr(const_reference other, callback clb) {
+            if (m_type != other.type() || size() != other.size())
                 throw std::invalid_argument("cannot perform unary_expr() if arrays are not equal");
 
-            if (m_type == value_t::array) {
-                for (unsigned long i = 0; i < size(); ++i) {
-                    m_value.values->at(i) = clb(m_value.values->at(i), other.data().at(i));
-                }
-            } else {
-                m_value.scalar = clb(m_value.scalar, other.m_value.scalar);
+            for (unsigned long i = 0; i < size(); ++i) {
+                m_data.at(i) = clb(m_data.at(i), other.data().at(i));
             }
+
+            return *this;
         }
 
         void random(int min, int max) {
@@ -380,16 +358,42 @@ namespace nd {
             std::mt19937 rng(rd());
             std::uniform_real_distribution<T> uni(-1, 1);
 
-            for (auto &val : *m_value.values) {
+            for (auto &val : m_data) {
                 val = uni(rng);
             }
+        }
+
+        bool operator==(const_reference other) const {
+            if(!std::equal(m_shape.begin(), m_shape.end(), other.shape().begin()) ||
+                    m_type != other.type()) return false;
+
+            ///TBD: check if values are equal
+            if (m_type == value_t::scalar) {
+                return other.data().at(0) == m_data.at(0);
+            } else if (m_shape.size() == 1) {
+                for (unsigned long i = 0; i < m_shape.at(0); ++i) {
+                    if(at(i) == other.at(i));
+                    else return false;
+                }
+            } else {
+                for (int i = 0; i < rows(); ++i) {
+                    if(at(i) == other.at(i));
+                    else return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool operator!=(const_reference other) const {
+            return *this == other ? false : true;
         }
 
         const this_type &operator=(T val) {
             if (m_type != value_t::scalar) throw std::invalid_argument("can't assign number, current type is array");
 
             if (m_base == nullptr) {
-                m_value.scalar = val;
+                m_data.at(0) = val;
                 return *this;
             } else {
                 m_base->set_val(val, m_offset);
@@ -402,48 +406,40 @@ namespace nd {
         ///////////////////////////
 
         const_reference operator+=(T val) {
-            unary_expr([&val](double v){ return v + val; });
-            return *this;
+            return unary_expr([&val](double v) { return v + val; });;
         }
 
         const_reference operator+=(const_reference other) {
-            unary_expr(other, std::plus<T>());
-            return *this;
+            return unary_expr(other, std::plus<T>());;
         }
 
         const_reference operator-=(T val) {
-            unary_expr([&val](double v){ return v - val; });
-            return *this;
+            return unary_expr([&val](double v) { return v - val; });;
         }
 
         const_reference operator-=(const_reference other) {
-            unary_expr(other, std::minus<T>());
-            return *this;
+            return unary_expr(other, std::minus<T>());;
         }
 
         const_reference operator*=(T val) {
-            unary_expr([&val](double v){ return v * val; });
-            return *this;
+            return unary_expr([&val](double v) { return v * val; });;
         }
 
         const_reference operator*=(const_reference other) {
-            unary_expr(other, std::multiplies<T>());
-            return *this;
+            return unary_expr(other, std::multiplies<T>());;
         }
 
         const_reference operator/=(T val) {
-            unary_expr([&val](double v){ return v / val; });
-            return *this;
+            return unary_expr([&val](double v) { return v / val; });;
         }
 
         const_reference operator/=(const_reference other) {
-            unary_expr(other, std::divides<T>());
-            return *this;
+            return unary_expr(other, std::divides<T>());;
         }
 
     private:
         value_t m_type = value_t::null;
-        array_value m_value = {};
+        vector_t m_data;
         shape_t m_shape;
         strides_t m_strides;
         this_type *m_base = nullptr;
@@ -459,21 +455,6 @@ namespace nd {
                 m_strides.at(i) = (unsigned long) std::accumulate(shape.begin() + i + 1, shape.end(), 1,
                                                                   std::multiplies<unsigned long>());
             }
-        }
-
-        static vector_t *__create_vector(const vector_t &vec) {
-            return new vector_t(vec.begin(), vec.end());
-        }
-
-        static vector_t *
-        __create_vector(const typename vector_t::iterator &first, const typename vector_t::iterator &second) {
-            return new vector_t(first, second);
-        }
-
-        std::string __to_string(const T val, const int n = 6) const {
-            char out[64];
-            sprintf(out, "%0.3f", val);
-            return out;
         }
     };
 }

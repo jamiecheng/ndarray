@@ -7,8 +7,17 @@ using namespace std;
 int main() {
     cout << "----------------------- 3D -----------------------\n";
     nd::array<double> array3d = {
-            {{1, 2, 3}, {1, 2, 3}, {1, 2, 3}},
-            {{4, 5, 6}, {4, 5, 6}, {4, 5, 6}}
+            {
+                    {1, 2, 3},
+                    {1, 2, 3},
+                    {1, 2, 3}
+            },
+
+            {
+                    {4, 5, 6},
+                    {4, 5, 6},
+                    {4, 5, 6}
+            }
     };
 
     cout << "n dimensions: " << array3d.ndim() << "\n";
@@ -16,7 +25,7 @@ int main() {
     cout << array3d << "\n";
 
     // get array in an array
-    cout << "sub array is:\n" << array3d[0] << "\n";
+    cout << "sub array is:\n" << array3d[1] << "\n";
 
     // get array scalar object
     cout << "scalar value: " << array3d[0][1][2] << "\n";
