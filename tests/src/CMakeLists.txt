@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 include_directories(../../include)
 
-set(SOURCE_FILES test_cases.cpp)
+set(SOURCE_FILES basic_tests.cpp matrix_op_tests.cpp calculation_tests.cpp)
 
 add_executable(unit_tests ${SOURCE_FILES})
 

@@ -79,25 +79,40 @@ TEST(basic_op, at) {
             {4, 5, 6}
     };
 
-    EXPECT_EQ(array2d.at(1).shape(), std::deque<unsigned long>({3}));
-    EXPECT_EQ(array2d.at(1).offset(), 3);
+    nd::array<int> expected = {1, 2, 3};
+
+    EXPECT_EQ(array2d.at(0), expected);
+
+    expected = {4, 5, 6};
+    EXPECT_EQ(array2d.at(1), expected);
 }
 
-TEST(matrix_op, transpose) {
-    Array array2d = {
-            {1, 2, 3},
-            {4, 5, 6}
-    };
+TEST(basic_op, compare) {
+    {
+        nd::array<int> a = {
+                {1, 2, 3},
+                {4, 5, 7}
+        };
 
-    Array t = {
-            {1, 4},
-            {2, 5},
-            {3, 6}
-    };
+        nd::array<int> a1 = {
+                {1, 2, 3},
+                {4, 5, 7}
+        };
 
-    EXPECT_EQ(array2d.transpose(), t);
-}
+        EXPECT_EQ(a, a1);
+    }
 
-TEST(calculation, sum) {
-    ///TBD
+    {
+        nd::array<int> a = {
+                {144, 244, 344},
+                {444, 544, 447}
+        };
+
+        nd::array<int> a1 = {
+                {1, 2, 3},
+                {4, 5, 7}
+        };
+
+        EXPECT_NE(a, a1);
+    }
 }

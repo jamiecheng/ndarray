@@ -193,6 +193,11 @@ namespace nd {
 
         bool is_array() const { return m_type == value_t::array; }
 
+        template <typename R>
+        R get() {
+
+        }
+
         T &item(const shape_t &indexes)  {
             if (indexes.size() != m_shape.size())
                 throw std::invalid_argument("requested shape size is not equal with the current shape size");
@@ -363,7 +368,25 @@ namespace nd {
                     m_type != other.type()) return false;
 
             ///TBD: check if values are equal
+            if (m_type == value_t::scalar) {
+                return other.data().at(0) == m_data.at(0);
+            } else if (m_shape.size() == 1) {
+                for (unsigned long i = 0; i < m_shape.at(0); ++i) {
+                    if(at(i) == other.at(i));
+                    else return false;
+                }
+            } else {
+                for (int i = 0; i < rows(); ++i) {
+                    if(at(i) == other.at(i));
+                    else return false;
+                }
+            }
+
             return true;
+        }
+
+        bool operator!=(const_reference other) const {
+            return *this == other ? false : true;
         }
 
         const this_type &operator=(T val) {
