@@ -125,6 +125,15 @@ namespace nd {
             __set_strides(m_shape);
         }
 
+//        array(const vector_t &data, const shape_t &shape, this_type *base)
+//                : m_type(value_t::array),
+//                  m_data(data),
+//                  m_shape(shape),
+//                  m_base(base)
+//        {
+//            __set_strides(shape);
+//        }
+
         ~array() {}
 
         reference &operator=(array other) {
@@ -141,7 +150,7 @@ namespace nd {
             std::stringstream result;
 
             if (m_type == value_t::scalar) {
-                result << std::to_string(m_data.at(0));
+                result << std::to_string(m_data.at(m_offset));
             } else if (m_shape.size() == 1) {
                 if (m_base == nullptr) result << "[ ";
                 else result << "  [ ";
@@ -193,12 +202,12 @@ namespace nd {
 
         bool is_array() const { return m_type == value_t::array; }
 
-        template <typename R>
+        template<typename R>
         R get() {
 
         }
 
-        T &item(const shape_t &indexes)  {
+        T &item(const shape_t &indexes) {
             if (indexes.size() != m_shape.size())
                 throw std::invalid_argument("requested shape size is not equal with the current shape size");
 
@@ -220,7 +229,7 @@ namespace nd {
                 throw std::range_error("requested index is out of range");
 
             strides_t indexes(ndim(), 0);
-            auto offset {m_offset};
+            auto offset{m_offset};
 
             indexes.at(0) = index;
 
@@ -242,7 +251,6 @@ namespace nd {
 
             if (m_shape.size() == 1) {
                 ret.m_type = value_t::scalar;
-                ret.m_data.at(0) = m_data.at(offset);
             }
 
             return ret;
@@ -294,7 +302,7 @@ namespace nd {
                 }
             }
 
-            this_type ret = *this;
+            auto ret = *this;
 
             for (unsigned long i = 0; i < n; ++i) {
                 ret.m_shape.at(i) = m_shape.at(static_cast<unsigned long>(permutation[i]));
@@ -334,8 +342,16 @@ namespace nd {
 
         template<typename callback>
         const_reference unary_expr(callback clb) {
-            for (auto &val : m_data) {
-                val = clb(val);
+            auto size = std::accumulate(m_shape.begin(), m_shape.end(), 1, std::multiplies<unsigned long>());
+
+            if (m_base == nullptr) {
+                for (unsigned long i = m_offset; i < m_offset + size; ++i) {
+                    m_data.at(i) = clb(m_data.at(i));
+                }
+            } else {
+                for (unsigned long i = m_offset; i < m_offset + size; ++i) {
+                    m_base->m_data.at(i) = clb(m_base->m_data.at(i));
+                }
             }
 
             return *this;
@@ -364,20 +380,21 @@ namespace nd {
         }
 
         bool operator==(const_reference other) const {
-            if(!std::equal(m_shape.begin(), m_shape.end(), other.shape().begin()) ||
-                    m_type != other.type()) return false;
+            if (!std::equal(m_shape.begin(), m_shape.end(), other.shape().begin()) ||
+                m_type != other.type())
+                return false;
 
             ///TBD: check if values are equal
             if (m_type == value_t::scalar) {
-                return other.data().at(0) == m_data.at(0);
+                return other.data().at(other.offset()) == m_data.at(m_offset);
             } else if (m_shape.size() == 1) {
                 for (unsigned long i = 0; i < m_shape.at(0); ++i) {
-                    if(at(i) == other.at(i));
+                    if (at(i) == other.at(i));
                     else return false;
                 }
             } else {
                 for (int i = 0; i < rows(); ++i) {
-                    if(at(i) == other.at(i));
+                    if (at(i) == other.at(i));
                     else return false;
                 }
             }
@@ -393,7 +410,7 @@ namespace nd {
             if (m_type != value_t::scalar) throw std::invalid_argument("can't assign number, current type is array");
 
             if (m_base == nullptr) {
-                m_data.at(0) = val;
+                m_data.at(m_offset) = val;
                 return *this;
             } else {
                 m_base->set_val(val, m_offset);
