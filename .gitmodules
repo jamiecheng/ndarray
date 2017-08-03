@@ -4,3 +4,6 @@
 [submodule "benchmark/lib"]
 	path = benchmark/lib
 	url = https://github.com/google/benchmark
+[submodule "benchmark/third_party/eigen"]
+	path = benchmark/third_party/eigen
+	url = https://github.com/RLovelett/eigen
