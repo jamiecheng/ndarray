@@ -2,15 +2,15 @@
 
 #include "array.hpp"
 
-using Array = nd::array<double>;
+using array = nd::array<double>;
 
 TEST(basic_op, data) {
-    Array array1d = {1, 2, 3, 4, 5};
+    array array1d = {1, 2, 3, 4, 5};
     std::vector<double> vec = {1, 2, 3, 4, 5};
 
     EXPECT_EQ(array1d.data(), vec);
 
-    Array array2d = {
+    array array2d = {
             {1, 2, 3},
             {4, 5, 6}
     };
@@ -20,7 +20,7 @@ TEST(basic_op, data) {
 }
 
 TEST(basic_op, ndim) {
-    Array array2d = {
+    array array2d = {
             {1, 2, 3},
             {4, 5, 6}
     };
@@ -28,7 +28,7 @@ TEST(basic_op, ndim) {
 }
 
 TEST(basic_op, strides) {
-    Array array2d = {
+    array array2d = {
             {1, 2, 3},
             {4, 5, 6}
     };
@@ -36,7 +36,7 @@ TEST(basic_op, strides) {
 }
 
 TEST(basic_op, shape) {
-    Array array3d = {
+    array array3d = {
             {
                     {1, 2, 3},
                     {1, 2, 3},
@@ -54,18 +54,18 @@ TEST(basic_op, shape) {
 }
 
 TEST(basic_op, type) {
-    Array array2d = {
+    array array2d = {
             {1, 2, 3},
             {4, 5, 6}
     };
     EXPECT_EQ(array2d.type(), nd::value_t::array);
 
-    Array array = 1;
+    array array = 1;
     EXPECT_EQ(array.type(), nd::value_t::scalar);
 }
 
 TEST(basic_op, item) {
-    Array array2d = {
+    array array2d = {
             {1, 2, 3},
             {4, 5, 6}
     };

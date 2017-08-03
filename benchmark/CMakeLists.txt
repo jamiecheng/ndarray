@@ -5,9 +5,9 @@ set(CMAKE_CXX_STANDARD 11)
 
 add_subdirectory(lib)
 
-include_directories(lib/include ../include)
+include_directories(lib/include ../include third_party/my_old_lib)
 
-set(SOURCE_FILES benchmark.cpp)
+set(SOURCE_FILES src/benchmark.cpp)
 add_executable(array_benchmark ${SOURCE_FILES})
 
 target_link_libraries(array_benchmark benchmark)

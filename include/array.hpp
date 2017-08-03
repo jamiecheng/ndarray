@@ -175,14 +175,9 @@ namespace nd {
             return m_data;
         }
 
-        unsigned long rows() const { return m_shape.at(0); }
+        unsigned long rows() const { return *m_shape.begin(); }
 
-        unsigned long columns() const {
-            if (m_shape.size() == 2) return m_shape.at(1);
-
-            /// TBD
-            return 0;
-        }
+        unsigned long columns() const { return *m_shape.end(); }
 
         const strides_t &strides() const { return m_strides; }
 
@@ -208,6 +203,23 @@ namespace nd {
         }
 
         T &item(const shape_t &indexes) {
+            if (indexes.size() != m_shape.size())
+                throw std::invalid_argument("requested shape size is not equal with the current shape size");
+
+            if (m_type == value_t::scalar)
+                throw std::invalid_argument("type is already is a scalar");
+
+            // calculate offset
+            unsigned long offset = {m_offset};
+
+            for (int i = 0; i < m_shape.size(); ++i) {
+                offset += indexes[i] * m_strides[i];
+            }
+
+            return m_data.at(offset);
+        }
+
+        const T &item(const shape_t &indexes) const {
             if (indexes.size() != m_shape.size())
                 throw std::invalid_argument("requested shape size is not equal with the current shape size");
 
@@ -310,6 +322,31 @@ namespace nd {
             }
 
             return ret;
+        }
+
+        this_type dot(const_reference other) const {
+            if(ndim() == 1) {
+                if(size() != other.size()) throw std::runtime_error("shapes are not aligned for dot product");
+                return this_type(std::inner_product(m_data.begin(), m_data.end(), other.m_data.begin(), 0));
+            } else if(ndim() == 2) {
+                double tmp {};
+                auto n = rows();
+                this_type ret({n, other.columns()}, 0.);
+
+                for (unsigned long i = 0; i < n; i++) {
+                    for (unsigned long k = 0; k < other.columns(); k++) {
+                        tmp = 0;
+                        for (unsigned long j = 0; j < other.rows(); j++) {
+                            tmp += item({i, j}) * other.item({j, k});
+                        }
+                        ret.item({i, k}) = tmp;
+                    }
+                }
+
+                return ret;
+            } else {
+
+            }
         }
 
         ////////////////
