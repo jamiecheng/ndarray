@@ -53,9 +53,9 @@ static void BM_sum(benchmark::State &state) {
 BENCHMARK(BM_sum);
 
 static void BM_dot(benchmark::State &state) {
-    array a({500, 500}, 0.0);
+    array a({10, 10}, 0.0);
 
-    array b({500, 500}, 0.0);
+    array b({10, 10}, 0.0);
 
     while (state.KeepRunning()) {
         a.dot(b);
@@ -99,15 +99,15 @@ static void BM_nnet_item(benchmark::State &state) {
 BENCHMARK(BM_nnet_item);
 
 static void BM_nnet_dot(benchmark::State &state) {
-    nnet::Array a(500, 500);
+    nnet::Array a(10, 10);
 
-    nnet::Array b(500, 500);
+    nnet::Array b(10, 10);
 
     while (state.KeepRunning()) {
         a.dot(b);
     }
 }
 
-BENCHMARK(BM_nnet_dot)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_nnet_dot);//->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
