@@ -12,8 +12,19 @@ using array = nd::array<double>;
 //    ndarray benchmark    //
 /////////////////////////////
 
+static void BM_constructor(benchmark::State &state) {
+    array a({1000, 1000}, 0.0);
+    array b;
+
+    while (state.KeepRunning()) {
+        b = a;
+    }
+}
+
+BENCHMARK(BM_constructor);
+
 static void BM_transpose(benchmark::State &state) {
-    array a({100, 100}, 0.0);
+    array a({1000, 1000}, 0.0);
 
     while (state.KeepRunning()) {
         a.transpose();
@@ -64,9 +75,39 @@ static void BM_dot(benchmark::State &state) {
 
 BENCHMARK(BM_dot);
 
+static void BM_hash(benchmark::State &state) {
+    array a({100, 100}, 0.);
+
+    while (state.KeepRunning()) {
+        a.hash();
+    }
+}
+
+BENCHMARK(BM_hash);
+
+static void BM_compare(benchmark::State &state) {
+    array a({100, 100}, 0.);
+    array b({100, 100}, 0.);
+
+    while (state.KeepRunning()) {
+        a == b;
+    }
+}
+
+BENCHMARK(BM_compare);
+
 /////////////////////////////
 //    old lib benchmark    //
 /////////////////////////////
+
+static void BM_nnet_constructor(benchmark::State &state) {
+
+    while (state.KeepRunning()) {
+        nnet::Array a(1000, 1000);
+    }
+}
+
+BENCHMARK(BM_nnet_constructor);
 
 static void BM_nnet_sum(benchmark::State &state) {
     nnet::Array a(100, 100);
@@ -79,7 +120,7 @@ static void BM_nnet_sum(benchmark::State &state) {
 BENCHMARK(BM_nnet_sum);
 
 static void BM_nnet_transpose(benchmark::State &state) {
-    nnet::Array a(100, 100);
+    nnet::Array a(1000, 1000);
 
     while (state.KeepRunning()) {
         a.transponse();

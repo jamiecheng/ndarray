@@ -104,6 +104,20 @@ TEST(basic_op, compare) {
 
     {
         nd::array<int> a = {
+                {1, 2, 3},
+                {4, 5, 7}
+        };
+
+        nd::array<int> a1 = {
+                {1, 2, 3},
+                {4, 5, 7}
+        };
+
+        EXPECT_EQ(a1.hash(), a.hash());
+    }
+
+    {
+        nd::array<int> a = {
                 {144, 244, 344},
                 {444, 544, 447}
         };

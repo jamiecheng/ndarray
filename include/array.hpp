@@ -47,6 +47,15 @@ namespace nd {
         using strides_t = std::deque<unsigned long>;
         using vector_t = std::vector<T>;
 
+        struct cache {
+            this_type *transpose{nullptr}, *dot{nullptr};
+
+            void reset() {
+                transpose = nullptr;
+                dot = nullptr;
+            }
+        };
+
         //////////////////////
         // friend operators //
         //////////////////////
@@ -59,7 +68,23 @@ namespace nd {
             return lhs += rhs;
         }
 
+        friend this_type operator+(T lhs, this_type rhs) {
+            return rhs.unary_expr([&lhs](double val) { return lhs + val; });
+        }
+
+        friend this_type operator+(this_type lhs, const_reference rhs) {
+            return lhs += rhs;
+        }
+
         friend this_type operator-(this_type lhs, T rhs) {
+            return lhs -= rhs;
+        }
+
+        friend this_type operator-(T lhs, this_type rhs) {
+            return rhs.unary_expr([&lhs](double val) { return lhs - val; });
+        }
+
+        friend this_type operator-(this_type lhs, const_reference rhs) {
             return lhs -= rhs;
         }
 
@@ -67,7 +92,23 @@ namespace nd {
             return lhs *= rhs;
         }
 
+        friend this_type operator*(T lhs, this_type rhs) {
+            return rhs.unary_expr([&lhs](double val) { return lhs * val; });
+        }
+
+        friend this_type operator*(this_type lhs, const_reference rhs) {
+            return lhs *= rhs;
+        }
+
         friend this_type operator/(this_type lhs, T rhs) {
+            return lhs /= rhs;
+        }
+
+        friend this_type operator/(T lhs, this_type rhs) {
+            return rhs.unary_expr([&lhs](double val) { return lhs / val; });
+        }
+
+        friend this_type operator/(this_type lhs, const_reference rhs) {
             return lhs /= rhs;
         }
 
@@ -77,18 +118,19 @@ namespace nd {
         // constructors //
         //////////////////
 
-        array(const this_type &other, unsigned long offset = 0)
+        array() {}
+
+        array(const this_type &other)
                 : m_data(other.data()),
                   m_type(other.m_type),
                   m_shape(other.m_shape),
                   m_strides(other.m_strides),
-                  m_base(nullptr),
-                  m_offset(offset) {
+                  m_base(other.m_base),
+                  m_offset(other.m_offset) {
         }
 
-        array(T &&val, unsigned long offset = 0)
-                : m_type(value_t::scalar),
-                  m_offset(offset) {
+        array(T &&val)
+                : m_type(value_t::scalar) {
             static_assert(std::is_arithmetic<T>::value, "incompatible element type");
 
             m_data.resize(1);
@@ -124,15 +166,6 @@ namespace nd {
 
             __set_strides(m_shape);
         }
-
-//        array(const vector_t &data, const shape_t &shape, this_type *base)
-//                : m_type(value_t::array),
-//                  m_data(data),
-//                  m_shape(shape),
-//                  m_base(base)
-//        {
-//            __set_strides(shape);
-//        }
 
         ~array() {}
 
@@ -197,9 +230,8 @@ namespace nd {
 
         bool is_array() const { return m_type == value_t::array; }
 
-        template<typename R>
-        R get() {
-
+        std::size_t hash() const {
+            return std::hash<this_type>{}(*this);
         }
 
         T &item(const shape_t &indexes) {
@@ -281,9 +313,12 @@ namespace nd {
             }
         }
 
-        this_type transpose(const shape_t &permute = {}) const {
+        this_type transpose(const shape_t &permute = {}) {
             if (ndim() < 2)
                 return *this;
+
+//            if (m_cache.transpose != nullptr)
+//                return *m_cache.transpose;
 
             auto n = permute.size();
             int permutation[64], revpermutation[64];
@@ -314,27 +349,28 @@ namespace nd {
                 }
             }
 
-            auto ret = *this;
+            this_type ret(*this);
 
             for (unsigned long i = 0; i < n; ++i) {
                 ret.m_shape.at(i) = m_shape.at(static_cast<unsigned long>(permutation[i]));
                 ret.m_strides.at(i) = m_strides.at(static_cast<unsigned long>(permutation[i]));
             }
 
+//            m_cache.transpose = &ret;
+
             return ret;
         }
 
         this_type dot(const_reference other) const {
-            if(ndim() == 1) {
-                if(size() != other.size()) throw std::runtime_error("shapes are not aligned for dot product");
+            if (ndim() == 1) {
+                if (size() != other.size()) throw std::runtime_error("shapes are not aligned for dot product");
                 return this_type(std::inner_product(m_data.begin(), m_data.end(), other.m_data.begin(), 0));
-            } else if(ndim() == 2) {
-                double tmp {};
-                auto n = rows();
-                this_type ret({n, other.columns()}, 0.);
+            } else if (ndim() == 2) {
+                double tmp{};
+                this_type ret({m_shape.at(0), other.m_shape.at(1)}, 0.);
 
-                for (unsigned long i = 0; i < n; i++) {
-                    for (unsigned long k = 0; k < other.columns(); k++) {
+                for (unsigned long i = 0; i < m_shape.at(0); i++) {
+                    for (unsigned long k = 0; k < other.m_shape.at(1); k++) {
                         tmp = 0;
                         for (unsigned long j = 0; j < other.rows(); j++) {
                             tmp += item({i, j}) * other.item({j, k});
@@ -349,6 +385,15 @@ namespace nd {
             }
         }
 
+        T mean() const {
+            T sum = 0;
+
+            for (const auto &val : m_data)
+                sum += std::abs(val);
+
+            return sum / m_data.size();
+        }
+
         ////////////////
         //  modifiers //
         ////////////////
@@ -360,10 +405,7 @@ namespace nd {
             std::swap(m_strides, other.m_strides);
             std::swap(m_base, other.m_base);
             std::swap(m_offset, other.m_offset);
-        }
-
-        void set_val(T val, unsigned long offset = 0) {
-            m_data.at(offset) = val;
+            std::swap(m_cache, other.m_cache);
         }
 
         void reshape(const shape_t &shape) {
@@ -406,7 +448,7 @@ namespace nd {
             return *this;
         }
 
-        void random(int min, int max) {
+        const_reference random(int min, int max) {
             std::random_device rd;
             std::mt19937 rng(rd());
             std::uniform_real_distribution<T> uni(-1, 1);
@@ -414,6 +456,8 @@ namespace nd {
             for (auto &val : m_data) {
                 val = uni(rng);
             }
+
+            return *this;
         }
 
         bool operator==(const_reference other) const {
@@ -421,7 +465,6 @@ namespace nd {
                 m_type != other.type())
                 return false;
 
-            ///TBD: check if values are equal
             if (m_type == value_t::scalar) {
                 return other.data().at(other.offset()) == m_data.at(m_offset);
             } else if (m_shape.size() == 1) {
@@ -450,7 +493,7 @@ namespace nd {
                 m_data.at(m_offset) = val;
                 return *this;
             } else {
-                m_base->set_val(val, m_offset);
+                m_base->m_data.at(m_offset) = val;
                 return *m_base;
             }
         }
@@ -498,6 +541,7 @@ namespace nd {
         strides_t m_strides;
         this_type *m_base = nullptr;
         unsigned long m_offset = {};
+        cache m_cache;
 
         // private setters
         void __set_strides(const shape_t &shape) {
@@ -509,6 +553,57 @@ namespace nd {
                 m_strides.at(i) = (unsigned long) std::accumulate(shape.begin() + i + 1, shape.end(), 1,
                                                                   std::multiplies<unsigned long>());
             }
+        }
+    };
+}
+
+/////////////////////////////
+//  hash support for array //
+/////////////////////////////
+
+namespace std {
+    template<class T>
+    inline void hash_combine(std::size_t &seed, T const &v) {
+        seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+
+    template<typename T>
+    struct hash<std::vector<T>> {
+        std::size_t operator()(std::vector<T> const &in) const {
+            size_t size = in.size();
+            size_t seed = 0;
+
+            for (size_t i = 0; i < size; i++) hash_combine(seed, in[i]);
+            return seed;
+        }
+    };
+
+    template<typename T>
+    struct hash<std::deque<T>> {
+        std::size_t operator()(std::vector<T> const &in) const {
+            size_t size = in.size();
+            size_t seed = 0;
+
+            for (size_t i = 0; i < size; i++) hash_combine(seed, in[i]);
+            return seed;
+        }
+    };
+
+    template<typename T>
+    struct hash<nd::array<T>> {
+        std::size_t operator()(nd::array<T> const &in) const {
+            size_t seed = 0;
+
+            // hash data
+            for (size_t i = 0; i < in.data().size(); i++) hash_combine(seed, in.data().at(i));
+
+            // hash shape
+            for (size_t i = 0; i < in.shape().size(); i++) hash_combine(seed, in.shape().at(i));
+
+            // hash strides
+            for (size_t i = 0; i < in.strides().size(); i++) hash_combine(seed, in.strides().at(i));
+
+            return seed;
         }
     };
 }
